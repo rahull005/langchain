@@ -23,12 +23,17 @@ print("Similarity Scores: ", str(embedding_similarity))
 
 
 #finding index of the most similar document
-index, score = sorted(list(enumerate(embedding_similarity)),key=lambda x:x[1])[-1]
-print("Most Similar Document Index: ", index)
+# index, score = sorted(list(enumerate(embedding_similarity)),key=lambda x:x[1])[-1]
+# print("Most Similar Document Index: ", index)
+# print("Similarity Score: ", score)
+
+d = sorted(list(enumerate(embedding_similarity)),key=lambda x:x[1])
+print("Most Similar Document Index: ", d[-1][0])
+
+
+idx,score = d[-1]
+print("Most Similar Document Index: ", idx)
 print("Similarity Score: ", score)
 
-
-
 # printing the most similar document
-result = docs[index]
-print("Most Similar Document: ", result)
+print("Most Similar Document: ", docs[idx])
