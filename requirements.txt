@@ -21,6 +21,9 @@ huggingface-hub
 # Environment Variable Management
 python-dotenv
 
+# Streamlit UI
+streamlit
+
 # Machine Learning Utilities
 numpy
 scikit-learn
