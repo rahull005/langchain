@@ -1,0 +1,43 @@
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+from dotenv import load_dotenv
+import os
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+
+load_dotenv()
+
+llm = HuggingFaceEndpoint(
+    repo_id="Qwen/Qwen2.5-72B-Instruct",
+    task="text-generation"
+    )
+
+model = ChatHuggingFace(llm=llm)
+
+template1 = PromptTemplate(
+    template='Write a detailed report on {topic}',
+    input_variables=['topic']
+)
+
+# 2nd prompt -> summary
+template2 = PromptTemplate(
+    template='Write a 5 line summary on the following text. /n {text}',
+    input_variables=['text']
+)
+
+prompt1 = template1.invoke({
+    'topic':'Black hole'
+})
+
+# 1st llm call
+response1 = model.invoke(prompt1)
+result1 = response1.content
+
+
+# 2nd llm call
+prompt2 = template2.invoke({
+    'text':result1 
+})
+
+final_response = model.invoke(prompt2)
+
+print(final_response.content)

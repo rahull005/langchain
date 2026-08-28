@@ -1,0 +1,559 @@
+LANGCHAIN OUTPUT PARSERS - COMPLETE GUIDE
+=========================================
+
+This guide explains why output parsers are used in LangChain and how to use
+StrOutputParser, StructuredOutputParser, JsonOutputParser, and
+PydanticOutputParser.
+
+
+IMPORTANT OVERVIEW: TWO WAYS TO GET STRUCTURED OUTPUT
+-------------------------------------------------------
+
+There are two main ways to receive structured output from an LLM in LangChain.
+
+FIRST APPROACH: MODEL-NATIVE STRUCTURED OUTPUT
+
+In the examples in the 5_Structured-output folder, the model is given a schema
+or a Pydantic model directly with with_structured_output(). For example:
+
+        structured_model = model.with_structured_output(json_schema)
+
+or:
+
+        structured_model = model.with_structured_output(Review)
+
+The schema tells the model integration which fields and data types are
+expected. When the selected model provider supports this feature, the model
+can return structured data directly. Depending on the schema, the result may
+be a Python dictionary or a Pydantic object. This approach is generally the
+preferred option when the model and provider support it because the structure
+is handled as part of the model call instead of relying only on instructions
+inside a text prompt.
+
+The model-native approach is covered by the structured-output examples in
+5_Structured-output. It is important to remember that support varies by model
+provider and integration. Not every LLM can use with_structured_output().
+
+SECOND APPROACH: OUTPUT PARSERS
+
+Some LLMs cannot produce structured output natively, or their LangChain
+integration does not support with_structured_output(). In that situation, we
+ask the model to follow formatting instructions in the prompt and then use an
+output parser to convert the returned text into the desired Python value.
+
+The parser workflow looks like this:
+
+        prompt -> model -> parser -> structured Python result
+
+The parser methods explained in this guide are used for this second approach:
+
+- StrOutputParser converts the response into plain text.
+- StructuredOutputParser asks for named fields and returns a dictionary.
+- JsonOutputParser parses JSON text into a Python dictionary or list.
+- PydanticOutputParser parses and validates the response as a Pydantic object.
+
+For parser-based structured output, format instructions are commonly added to
+the prompt with parser.get_format_instructions(). The model then generates
+text that follows those instructions, and the parser reads that text. Because
+the model is still generating text, parsing can fail if the response is not
+valid or does not match the expected format. Applications should handle those
+errors and validate important data.
+
+Simple decision rule:
+
+- Use model.with_structured_output(schema) when the chosen model integration
+    supports it and you want native structured output.
+- Use an output parser when native structured output is unavailable, when you
+    need a provider-independent text-to-structure workflow, or when you want to
+    explicitly control the formatting instructions and parsing step.
+
+
+1. THE PROBLEM: MODEL OUTPUT IS USUALLY UNSTRUCTURED
+----------------------------------------------------
+
+A language model normally returns text. Even when the prompt asks for a list,
+JSON, a number, or a particular format, the result is still generated text and
+is not automatically a reliable Python object.
+
+For example, a model may return:
+
+    The product is excellent. Rating: 5/5.
+
+A person can understand this, but a Python program cannot safely treat it as a
+record with fields such as "review" and "rating" without additional processing.
+The model may also add explanations, Markdown fences, unexpected fields, or
+slightly different formatting.
+
+Output parsers provide the conversion and validation step between the model's
+message and the rest of an application.
+
+
+2. WHAT IS AN OUTPUT PARSER?
+----------------------------
+
+An output parser is a LangChain component that receives the model response and
+converts it into a useful Python value.
+
+Typical flow:
+
+    prompt -> model -> parser -> application code
+
+Without a parser:
+
+    response = model.invoke(prompt)
+    print(response.content)
+
+With a parser:
+
+    response = chain.invoke(input_data)
+    # response is already converted into the desired Python type
+
+A parser may do one or more of the following:
+
+- Extract text from an AIMessage.
+- Convert text into a Python string, dictionary, list, or object.
+- Provide format instructions that can be included in a prompt.
+- Validate required fields and data types.
+- Raise an error when the model response cannot be parsed.
+
+Important: a parser cannot force a model to behave perfectly. It parses and
+validates the response it receives. The prompt, model, parser, and error
+handling should be designed together.
+
+
+3. WHY ARE PARSERS USED?
+------------------------
+
+Parsers are useful for these reasons:
+
+A. Predictable data
+
+Application code works better with a known structure than with free-form text.
+For example, code can use result["summary"] or result.rating instead of trying
+to extract values from a paragraph.
+
+B. Automation
+
+Structured output can be sent to a database, API, UI, spreadsheet, search
+index, or another program without manual copying.
+
+C. Validation
+
+A parser can check that a value is a string, integer, list, or required field.
+This catches malformed output near the model boundary.
+
+D. Separation of responsibilities
+
+The model generates the answer. The parser translates the answer. The rest of
+the application consumes a known type. This keeps application logic simpler.
+
+E. Better chains
+
+A parser can be added to a LangChain Expression Language chain:
+
+    chain = prompt | model | parser
+    result = chain.invoke({"topic": "black holes"})
+
+The final result is the parser's result rather than the raw model message.
+
+
+4. STROUTPUTPARSER
+------------------
+
+Import:
+
+    from langchain_core.output_parsers import StrOutputParser
+
+Purpose:
+
+StrOutputParser is the simplest parser. It converts a chat model response into
+plain text, normally taking the text content from the AI message.
+
+Typical use:
+
+    parser = StrOutputParser()
+    chain = prompt | model | parser
+    answer = chain.invoke({"topic": "black holes"})
+    print(answer)
+
+The value of answer is a Python string.
+
+Without StrOutputParser, chat models commonly return an AIMessage object. With
+the parser, the chain returns the message content directly, which is convenient
+when the next step expects text.
+
+Use StrOutputParser when:
+
+- You want a normal text answer.
+- You are passing one model's text to another prompt.
+- You are displaying the answer in a UI.
+- You do not need named fields or type validation.
+
+Example chain:
+
+    prompt1 = PromptTemplate.from_template(
+        "Write a report about {topic}"
+    )
+    prompt2 = PromptTemplate.from_template(
+        "Summarize this report in five lines:\n{text}"
+    )
+
+    report_chain = prompt1 | model | StrOutputParser()
+    report = report_chain.invoke({"topic": "black holes"})
+
+    summary_chain = prompt2 | model | StrOutputParser()
+    summary = summary_chain.invoke({"text": report})
+
+What it does not do:
+
+- It does not create JSON.
+- It does not validate a schema.
+- It does not extract named fields.
+- It does not guarantee that the text follows a special format.
+
+
+5. STRUCTUREDOUTPUTPARSER
+--------------------------
+
+Imports:
+
+    from langchain.output_parsers import StructuredOutputParser
+    from langchain.output_parsers import ResponseSchema
+
+In some LangChain versions, these imports are available from
+langchain.output_parsers. Check the installed version if an import path differs.
+
+Purpose:
+
+StructuredOutputParser is useful when you want several named fields and want
+the parser to generate format instructions for the prompt. You describe each
+field with ResponseSchema objects, ask the model to follow the instructions,
+and then parse the returned JSON-like text.
+
+Example:
+
+    response_schemas = [
+        ResponseSchema(
+            name="answer",
+            description="The answer to the user's question"
+        ),
+        ResponseSchema(
+            name="confidence",
+            description="A confidence value from 1 to 10"
+        ),
+    ]
+
+    parser = StructuredOutputParser.from_response_schemas(response_schemas)
+
+    prompt = PromptTemplate(
+        template=(
+            "Answer the question.\n"
+            "{format_instructions}\n"
+            "Question: {question}"
+        ),
+        input_variables=["question"],
+        partial_variables={
+            "format_instructions": parser.get_format_instructions()
+        },
+    )
+
+    chain = prompt | model | parser
+    result = chain.invoke({"question": "Why is the sky blue?"})
+
+    print(result["answer"])
+    print(result["confidence"])
+
+The parser normally returns a Python dictionary.
+
+Why get_format_instructions matters:
+
+The parser knows the field names and adds instructions explaining the expected
+format. Including those instructions in the prompt gives the model a clearer
+target than simply saying "return structured data".
+
+Use StructuredOutputParser when:
+
+- You need a small dictionary with named fields.
+- You want the parser to generate prompt formatting instructions.
+- You do not need a full Pydantic model.
+- You are working with an older or general LangChain parser workflow.
+
+Limitations:
+
+- Field types are not as strongly represented as they are in a Pydantic model.
+- The model can still return invalid JSON or incorrect values.
+- Complex nested validation may be better handled by JsonOutputParser or
+  PydanticOutputParser.
+
+
+6. JSONOUTPUTPARSER
+--------------------
+
+Import:
+
+    from langchain_core.output_parsers import JsonOutputParser
+
+Purpose:
+
+JsonOutputParser parses the model's response as JSON and returns a normal
+Python object, usually a dictionary or list. It is a good choice when you want
+JSON output but do not want to define a Pydantic class.
+
+Basic example:
+
+    parser = JsonOutputParser()
+
+    prompt = PromptTemplate(
+        template=(
+            "Return a JSON object with the keys name and age.\n"
+            "{format_instructions}\n"
+            "Person: {person}"
+        ),
+        input_variables=["person"],
+        partial_variables={
+            "format_instructions": parser.get_format_instructions()
+        },
+    )
+
+    chain = prompt | model | parser
+    result = chain.invoke({"person": "Ada is 36 years old."})
+
+    print(result)
+    # Example result: {"name": "Ada", "age": 36}
+
+JsonOutputParser is especially useful for nested JSON. You can also pass a
+Pydantic model to it in LangChain versions that support this pattern:
+
+    parser = JsonOutputParser(pydantic_object=Person)
+
+In that case, the parser can use the model's schema when creating format
+instructions and validating the parsed structure, depending on the installed
+LangChain version.
+
+Use JsonOutputParser when:
+
+- The downstream code expects a dictionary or list.
+- The JSON structure is dynamic or changes between tasks.
+- You want nested JSON without creating a custom class.
+- You need JSON parsing inside a chain.
+
+Common failures:
+
+- The model wraps JSON in Markdown fences.
+- A trailing comma makes the content invalid JSON.
+- A value is returned as text instead of a number.
+- Required keys are missing.
+- The model adds an explanation before or after the JSON.
+
+JsonOutputParser parses JSON syntax, but a plain JsonOutputParser is not the
+same as complete business validation. Validate important fields after parsing,
+or use a Pydantic model when strict validation is needed.
+
+
+7. PYDANTICOUTPUTPARSER
+------------------------
+
+Imports:
+
+    from pydantic import BaseModel, Field
+    from langchain_core.output_parsers import PydanticOutputParser
+
+Purpose:
+
+PydanticOutputParser converts the model output into an instance of a Pydantic
+model. The Pydantic class defines the expected fields, types, descriptions, and
+validation rules in one place.
+
+Example:
+
+    class ProductReview(BaseModel):
+        summary: str = Field(description="A short summary of the review")
+        rating: int = Field(description="A rating from 1 to 5")
+        pros: list[str] = Field(description="Positive points")
+        cons: list[str] = Field(description="Negative points")
+
+    parser = PydanticOutputParser(pydantic_object=ProductReview)
+
+    prompt = PromptTemplate(
+        template=(
+            "Analyze this product review.\n"
+            "{format_instructions}\n"
+            "Review: {review}"
+        ),
+        input_variables=["review"],
+        partial_variables={
+            "format_instructions": parser.get_format_instructions()
+        },
+    )
+
+    chain = prompt | model | parser
+    result = chain.invoke({"review": "The phone is fast but expensive."})
+
+    print(result.summary)
+    print(result.rating)
+    print(result.pros)
+    print(result.model_dump())
+
+The result is a ProductReview object, not just a raw dictionary.
+
+Pydantic provides:
+
+- Required fields.
+- Python type conversion when possible.
+- Validation errors for invalid values.
+- Descriptions that can be included in format instructions.
+- A reusable contract shared by parsing and application code.
+- Serialization through model_dump() or model_dump_json().
+
+You can add validation constraints. For example:
+
+    class Review(BaseModel):
+        rating: int = Field(ge=1, le=5)
+
+The ge=1 and le=5 constraints reject ratings outside the allowed range.
+
+Use PydanticOutputParser when:
+
+- The output is an important application contract.
+- You need type validation.
+- You want an object with named attributes.
+- The same output schema is used in multiple places.
+- Invalid data should raise an error instead of silently continuing.
+
+Important distinction:
+
+PydanticOutputParser is a parser that asks the model for formatted output and
+then validates it. It is different from model.with_structured_output(Person),
+which asks a model integration to produce structured output directly. Both can
+produce Pydantic objects, but their support and behavior depend on the model
+provider and LangChain integration.
+
+
+8. COMPARISON
+-------------
+
+StrOutputParser
+- Result: plain Python string.
+- Validation: none beyond extracting text.
+- Best for: normal answers and text-to-text chains.
+
+StructuredOutputParser
+- Result: dictionary with named fields.
+- Schema: ResponseSchema descriptions.
+- Best for: simple multi-field structured responses with generated instructions.
+
+JsonOutputParser
+- Result: Python dictionary or list parsed from JSON.
+- Schema: optional, and can be combined with Pydantic in supported versions.
+- Best for: JSON and nested structures without necessarily defining a class.
+
+PydanticOutputParser
+- Result: Pydantic model instance.
+- Schema: Pydantic class with types and validation.
+- Best for: reliable application data and explicit contracts.
+
+Simple selection rule:
+
+- Need text? Use StrOutputParser.
+- Need a small dictionary? Use StructuredOutputParser.
+- Need JSON without a custom class? Use JsonOutputParser.
+- Need typed, validated objects? Use PydanticOutputParser.
+
+
+9. PARSER USAGE WITH LCEL
+-------------------------
+
+LangChain Expression Language uses the pipe operator to connect components:
+
+    chain = prompt | model | parser
+
+This means:
+
+1. The input is passed to the prompt.
+2. The formatted prompt is passed to the model.
+3. The model response is passed to the parser.
+4. The parsed result is returned by chain.invoke().
+
+Example with a string parser:
+
+    chain = prompt | model | StrOutputParser()
+
+Example with a Pydantic parser:
+
+    parser = PydanticOutputParser(pydantic_object=Review)
+    chain = prompt | model | parser
+
+Using a parser at the end of a chain makes the output contract visible in the
+code and avoids repeating response.content in every call.
+
+
+10. ERROR HANDLING AND RELIABILITY
+----------------------------------
+
+Always expect that a model can return malformed output. A production program
+should handle parsing errors:
+
+    try:
+        result = chain.invoke(input_data)
+    except Exception as error:
+        print(f"Could not parse model output: {error}")
+
+For more reliable results:
+
+- Include parser.get_format_instructions() in the prompt when supported.
+- Tell the model not to add explanations outside the requested format.
+- Keep field names and descriptions clear.
+- Use low temperature when consistent formatting is important.
+- Validate important values after parsing.
+- Log the raw model response during development.
+- Retry with a correction prompt when parsing fails.
+- Prefer provider-native structured output when the model integration supports it.
+- Keep schemas small and avoid ambiguous field descriptions.
+
+A parser error is useful: it signals that untrusted model output did not meet
+the application contract. Do not blindly ignore the error and continue with
+possibly incorrect data.
+
+
+11. PARSER VERSUS STRUCTURED OUTPUT
+-----------------------------------
+
+There are two related approaches in LangChain:
+
+A. Output parser approach
+
+    prompt | model | parser
+
+The model receives formatting instructions in the prompt, and the parser
+interprets the returned text afterward.
+
+B. Model-native structured output approach
+
+    structured_model = model.with_structured_output(Review)
+
+The model integration is asked to return the requested structure directly. This
+can be more reliable when the selected provider supports structured output, but
+support differs between providers and models.
+
+The parser approach is flexible and works with many text-generating models. The
+model-native approach can provide stronger guarantees when supported. Choose
+based on the model integration, required reliability, and the shape of the
+application.
+
+
+12. FINAL SUMMARY
+-----------------
+
+Output parsers solve the boundary problem between natural-language model
+responses and predictable application data.
+
+StrOutputParser returns text. StructuredOutputParser creates and parses a
+simple named-field structure. JsonOutputParser parses JSON into Python data.
+PydanticOutputParser parses JSON-like output into a typed and validated Pydantic
+object.
+
+The more structured the required result, the more important it is to define a
+clear schema, include format instructions, validate the result, and handle
+parsing failures. For a simple conversation use StrOutputParser. For reliable
+application workflows, prefer a JSON schema or Pydantic model and verify that
+the chosen model integration supports the structured-output method you select.
