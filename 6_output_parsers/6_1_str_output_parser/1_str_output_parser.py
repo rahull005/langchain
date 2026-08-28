@@ -20,9 +20,11 @@ template1 = PromptTemplate(
 
 # 2nd prompt -> summary
 template2 = PromptTemplate(
-    template='Write a 5 line summary on the following text. /n {text}',
+    template='Write a 5 line summary on the following text. /n {text}' ,
     input_variables=['text']
 )
+
+parser = StrOutputParser()
 
 prompt1 = template1.invoke({
     'topic':'Black hole'
@@ -40,4 +42,6 @@ prompt2 = template2.invoke({
 
 final_response = model.invoke(prompt2)
 
-print(final_response.content)
+parsed = parser.parse(final_response.content)
+
+print(parsed)

@@ -34,6 +34,6 @@ prompt = template.invoke({
 
 
 response = model.invoke(prompt)
-result = parser.parse(response.content)
+parsed = parser.parse(response.content)
 
-print(result)
+print(parsed)

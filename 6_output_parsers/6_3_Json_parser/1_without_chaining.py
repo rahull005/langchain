@@ -25,5 +25,6 @@ prompt = template.invoke({
 }) 
 
 response = model.invoke(prompt)
+parsed = parser.parse(response.content)
 
-print(response)
+print(parsed)
