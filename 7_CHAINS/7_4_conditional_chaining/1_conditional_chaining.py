@@ -61,7 +61,7 @@ str_parser = StrOutputParser()
 branch_chain = RunnableBranch(
     (lambda x:x.sentiment == 'positive', template2 | model | str_parser),
     (lambda x:x.sentiment == 'negative', template3 | model | str_parser),
-    RunnableLambda(lambda x: "could not find sentiment")
+    RunnableLambda(lambda x: "could not find sentiment") #use to convert any function into Runnable lambda
 )
 
 chain = pos_neg_chain | branch_chain

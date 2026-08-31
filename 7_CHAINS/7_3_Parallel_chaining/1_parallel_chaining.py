@@ -3,13 +3,15 @@ from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableParallel
+import os
 
 load_dotenv()
 
 #first-model
 llm1 = HuggingFaceEndpoint(
     repo_id="Qwen/Qwen2.5-72B-Instruct",
-    task="text-generation"
+    task="text-generation",
+    huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_ACCESS_TOKEN")
     )
 
 model = ChatHuggingFace(llm=llm1)
@@ -66,3 +68,4 @@ response = final_chain.invoke({'topic':'Chat-GPT'})
 
 
 print(response)
+print(final_chain.get_graph().print_ascii())
