@@ -1,0 +1,29 @@
+##Document structure: <------------------------------------------
+
+Document(
+    page_content:{actual_page_content},
+    metadata:{metadata of the doc}
+)
+
+
+
+
+
+##by using the loader.load(),  <------------------------------
+we get the list of docs =>       List<Docs>
+
+
+
+
+
+
+#retrive
+we can retrive by =>  lst[doc[0].page_content] <------------------
+                      lst[doc[0].metadata]
+
+
+                
+#length  => len(docs)                
+
+
+===========go through the file-1 for reference========================
