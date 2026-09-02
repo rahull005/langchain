@@ -1,0 +1,514 @@
+================================================================================
+LANGUAGE-SPECIFIC TEXT SPLITTER - DETAILED EXPLANATION
+================================================================================
+
+OVERVIEW:
+---------
+The Language-Specific Text Splitter (RecursiveCharacterTextSplitter with 
+language support) is designed specifically for splitting code and structured 
+language content while preserving syntax and logical structure. It uses 
+language-aware separators to split code at natural boundaries (classes, 
+functions, blocks) rather than arbitrary characters.
+
+KEY FEATURES:
+-------------
+• Language-aware splitting (Python, JavaScript, Java, Go, C#, etc.)
+• Preserves code structure and indentation
+• Splits at semantic boundaries (class, function, loop, etc.)
+• Maintains code integrity and syntax
+• Better for embeddings of code chunks
+• Supports multiple programming languages
+
+SUPPORTED LANGUAGES:
+--------------------
+The Language enum includes:
+- PYTHON
+- JAVASCRIPT (also JS)
+- JAVA
+- GO
+- RUST
+- C#
+- C
+- C++
+- PHP
+- RUBY
+- MARKDOWN
+- HTML
+- SOL (Solidity)
+- BASH
+- SQL
+- And many more...
+
+KEY PARAMETERS:
+---------------
+1. language (Language enum):
+   - The programming language of the code
+   - Example: Language.PYTHON
+
+2. chunk_size (int):
+   - Maximum characters per chunk
+   - Example: chunk_size=200
+
+3. chunk_overlap (int):
+   - Character overlap between chunks
+   - Helps maintain context
+
+4. Created via: RecursiveCharacterTextSplitter.from_language()
+
+
+HOW IT WORKS - STEP BY STEP:
+----------------------------
+1. Detect the language (provided by user)
+2. Use language-specific separators
+3. Split code at logical boundaries:
+   - Class/function definitions
+   - Block boundaries
+   - Import statements
+4. Recursively apply same logic to chunks > chunk_size
+5. Fall back to finer-grained separators if needed
+6. Add overlap while maintaining code validity
+7. Return list of code chunks with structure preserved
+
+LANGUAGE-SPECIFIC SEPARATORS:
+------------------------------
+Each language has a hierarchy of separators that respects its syntax:
+
+PYTHON:
+  - "\nclass "        (class definitions)
+  - "\ndef "          (function definitions)
+  - "\n    def "      (method definitions)
+  - "\n\n"            (blank lines/paragraphs)
+  - "\n"              (newlines)
+  - " "               (spaces)
+
+JAVASCRIPT/TYPESCRIPT:
+  - "\nclass "        (class definitions)
+  - "\nfunction "     (function definitions)
+  - "\nconst "        (variable declarations)
+  - "\n\n"            (blank lines)
+  - "\n"              (newlines)
+  - " "               (spaces)
+
+JAVA:
+  - "\nclass "
+  - "\npublic "
+  - "\nprivate "
+  - "\nprotected "
+  - "\n\n"
+  - "\n"
+  - " "
+
+The order ensures code structure is preserved at the highest level.
+
+
+WHY USE LANGUAGE-SPECIFIC SPLITTING?
+-------------------------------------
+1. PRESERVES SYNTAX: Doesn't split function definitions mid-way
+2. MAINTAINS CONTEXT: Keeps related code together
+3. BETTER EMBEDDINGS: Code chunks have semantic meaning
+4. EASIER RETRIEVAL: Chunks represent logical units
+5. REDUCES ERRORS: No broken syntax in chunks
+6. IMPROVES LLM PROCESSING: Models understand complete units
+
+COMPARISON EXAMPLE:
+-------------------
+TEXT:
+class Student:
+    def __init__(self, name, age):
+        self.name = name
+        self.age = age
+    
+    def get_details(self):
+        return f"{self.name} is {self.age}"
+
+Generic Splitter Result (broken):
+Chunk 1: "class Student:"
+         "    def __init__(self, name, age):"
+         "        self.name = n"
+         (incomplete - Python won't execute)
+
+Language-Specific Splitter Result (intact):
+Chunk 1: "class Student:"
+         "    def __init__(self, name, age):"
+         "        self.name = name"
+         "        self.age = age"
+         
+Chunk 2: "    def get_details(self):"
+         "        return f\"{self.name} is {self.age}\""
+         (complete functions - Python will execute)
+
+
+EXAMPLE WALKTHROUGH:
+--------------------
+Python code example:
+
+class Student:
+    def __init__(self, name, age, grade):
+        self.name = name
+        self.age = age
+        self.grade = grade
+
+    def get_details(self):
+        return self.name
+
+    def is_passing(self):
+        return self.grade >= 6.0
+
+student1 = Student("Aarav", 20, 8.2)
+print(student1.get_details())
+
+With chunk_size=200, Language.PYTHON:
+
+Chunk 1: "class Student:\n    def __init__(self, name, age, grade):\n        self.name = name\n        self.age = age\n        self.grade = grade"
+
+Chunk 2: "    def get_details(self):\n        return self.name\n\n    def is_passing(self):\n        return self.grade >= 6.0"
+
+Chunk 3: "student1 = Student("Aarav", 20, 8.2)\nprint(student1.get_details())"
+
+Notice how complete methods stay together!
+
+VISUAL TEXT SPLITTING DIAGRAM:
+==============================
+
+ORIGINAL PYTHON CODE:
+─────────────────────────────────────────────────────
+class Student:
+    def __init__(self, name, age, grade):
+        self.name = name
+        self.age = age
+        self.grade = grade
+
+    def get_details(self):
+        return self.name
+
+    def is_passing(self):
+        return self.grade >= 6.0
+
+student1 = Student("Aarav", 20, 8.2)
+
+WITH chunk_size=200, Language.PYTHON:
+
+STEP 1: Try splitting on "\nclass " (class definitions)
+
+┌──────────────────────────────────────────────────────────┐
+│ CLASS DEFINITION:                                        │
+│                                                          │
+│ class Student:                                           │
+│     def __init__(self, name, age, grade):               │
+│         self.name = name                                 │
+│         self.age = age                                   │
+│         self.grade = grade                               │
+│                                                          │
+│ [METHOD 1] def get_details(self): return self.name       │
+│ [METHOD 2] def is_passing(self): return self.grade >= 6.0│
+│                                                          │
+│  Total: 250 chars ✗ (> 200 limit)                       │
+│                                                          │
+│  TOO LARGE! Recursively split on next separator          │
+└──────────────────────────────────────────────────────────┘
+          ↓
+  STEP 2: Try splitting on "\ndef " (function definitions)
+          ↓
+┌──────────────────────────────────────────────────────────┐
+│ CLASS + __init__:                                        │
+│                                                          │
+│ class Student:                                           │
+│     def __init__(self, name, age, grade):               │
+│         self.name = name                                 │
+│         self.age = age                                   │
+│         self.grade = grade                               │
+│                                                          │
+│  Length: 140 chars ✓ (< 200 limit) - KEEP THIS          │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│ get_details METHOD:                                      │
+│                                                          │
+│ def get_details(self):                                   │
+│     return self.name                                     │
+│                                                          │
+│ def is_passing(self):                                    │
+│     return self.grade >= 6.0                             │
+│                                                          │
+│  Length: 85 chars ✓ (< 200 limit) - KEEP THIS           │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│ MODULE CODE:                                             │
+│                                                          │
+│ student1 = Student("Aarav", 20, 8.2)                     │
+│                                                          │
+│  Length: 40 chars ✓ (< 200 limit) - KEEP THIS           │
+└──────────────────────────────────────────────────────────┘
+
+FINAL OUTPUT:
+─────────────
+╔═══════════════════════════════════════════════════════════════════════╗
+║ CHUNK 1 (140 chars) - CLASS WITH CONSTRUCTOR                         ║
+╠═══════════════════════════════════════════════════════════════════════╣
+║ class Student:                                                        ║
+║     def __init__(self, name, age, grade):                            ║
+║         self.name = name                                             ║
+║         self.age = age                                               ║
+║         self.grade = grade                                           ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║ CHUNK 2 (85 chars) - METHODS                                         ║
+╠═══════════════════════════════════════════════════════════════════════╣
+║ def get_details(self):                                                ║
+║     return self.name                                                 ║
+║ def is_passing(self):                                                ║
+║     return self.grade >= 6.0                                         ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║ CHUNK 3 (40 chars) - USAGE                                           ║
+╠═══════════════════════════════════════════════════════════════════════╣
+║ student1 = Student("Aarav", 20, 8.2)                                 ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+KEY OBSERVATIONS:
+─────────────────
+✓ Each chunk is VALID Python code (can be executed)
+✓ Classes stay together with their methods
+✓ Methods are grouped logically
+✓ Separator hierarchy: ["\nclass ", "\ndef ", "\n\n", "\n", " ", ""]
+✓ Indentation is preserved
+✓ Much better for code embeddings and retrieval
+✗ Still doesn't understand code semantics perfectly
+
+COMPARE WITH CHARACTER SPLITTER:
+────────────────────────────────────────────────────────
+CharacterTextSplitter would produce:
+  "class Student:\n    def __init__...self.grade = gra"  ← BROKEN!
+
+LanguageTextSplitter produces:
+  "class Student:\n    def __init__...self.grade = grade\n\n    def get_details..." ← COMPLETE!
+
+
+FLOW CHART:
+===========
+
+                    ┌───────────────────────────┐
+                    │  Start: Code Text         │
+                    │  Language: PYTHON, etc.   │
+                    └────────────┬──────────────┘
+                                 │
+                    ┌────────────┴───────────────┐
+                    │ Load Language Separators   │
+                    │ For PYTHON:                │
+                    │ ["\nclass ", "\ndef ",    │
+                    │  "\n\n", "\n", " ", ""]   │
+                    └────────────┬───────────────┘
+                                 │
+                ┌────────────────┴──────────────┐
+                │  Initialize:                  │
+                │  - separator_index = 0        │
+                │  - chunks = []                │
+                │  - pending_chunks = [text]    │
+                └────────────┬──────────────────┘
+                             │
+            ┌────────────────┴──────────────┐
+            │  For each pending chunk:      │
+            │  (start with full text)       │
+            └────────────┬──────────────────┘
+                         │
+        ┌────────────────┴──────────────────┐
+        │ Get current separator             │
+        │ sep = separators[separator_index] │
+        └────────────┬─────────────────────┘
+                     │
+        ┌────────────┴──────────────────┐
+        │ Split chunk on separator      │
+        │ results = chunk.split(sep)    │
+        └────────────┬──────────────────┘
+                     │
+        ┌────────────┴───────────────────────┐
+        │ For each result:                   │
+        │ Check size                         │
+        └────────┬──────────────────┬────────┘
+                 │                  │
+        ┌────────▼──────────┐  ┌────▼──────────┐
+        │ Size OK?          │  │  Size > limit?│
+        │ (<chunk_size)     │  │                │
+        │                   │  │                │
+        │ YES          NO   │  │   YES     NO   │
+        │  │            │   │  │    │       │   │
+    ┌───▼──┘         │   │  └──┬┘       │   │
+    │         ┌──────▼──┐  │  ┌┴────────┘   │
+    │         │ Add to  │  │  │             │
+    │         │ pending │  │  │             │
+    │         │ for next│  │  │             │
+    │         │separator│  │  │             │
+    │         └────┬────┘  │  │             │
+    │              │       │  │             │
+┌───▼──────────────┘       │  │             │
+│ Add chunk to results    │  │             │
+│ (size is appropriate)   │  │             │
+└───┬──────────────────────┘  │             │
+    │                          │             │
+    │                   ┌──────▼─────────────┤
+    │                   │  More separators   │
+    │                   │  to try?           │
+    │                   │                    │
+    │                   │  YES          NO   │
+    │                   │   │            │   │
+    │                   └───┴────┬───────┘   │
+    │                            │           │
+    │                    ┌───────▼─────┐     │
+    │                    │ separator_   │     │
+    │                    │ index++      │     │
+    │                    │ (continue    │     │
+    │                    │  recursion)  │     │
+    │                    └───────┬─────┘     │
+    │                            │           │
+    │                    ┌───────▼─────┐     │
+    │                    │ Fall back to │     │
+    │                    │ char-level  │     │
+    │                    │ splitting   │     │
+    │                    └───────┬─────┘     │
+    │                            │           │
+    └──────┬─────────────────────┘           │
+           │                                 │
+           │                                 │
+        ┌──▼──────────────────────────────────┘
+        │
+    ┌───▼────────────────────────┐
+    │ Add overlap between chunks  │
+    │ (if chunk_overlap > 0)      │
+    └───┬────────────────────────┘
+        │
+    ┌───▼────────────────────────┐
+    │  Return structured code     │
+    │  chunks with preserved      │
+    │  syntax and logic           │
+    └────────────────────────────┘
+
+
+CODE EXAMPLE:
+=============
+
+from langchain_classic.text_splitter import (
+    RecursiveCharacterTextSplitter, 
+    Language
+)
+
+# Python code
+python_code = """
+class Student:
+    def __init__(self, name, age, grade):
+        self.name = name
+        self.age = age
+        self.grade = grade
+
+    def get_details(self):
+        return self.name
+
+    def is_passing(self):
+        return self.grade >= 6.0
+"""
+
+# Create language-specific splitter
+splitter = RecursiveCharacterTextSplitter.from_language(
+    language=Language.PYTHON,
+    chunk_size=200,
+    chunk_overlap=20
+)
+
+# Split the code
+chunks = splitter.split_text(python_code)
+
+# Each chunk contains valid Python code
+
+
+# For other languages:
+
+# JavaScript
+js_splitter = RecursiveCharacterTextSplitter.from_language(
+    language=Language.JAVASCRIPT,
+    chunk_size=300
+)
+
+# Java
+java_splitter = RecursiveCharacterTextSplitter.from_language(
+    language=Language.JAVA,
+    chunk_size=250
+)
+
+
+ADVANTAGES:
+-----------
+✓ Preserves code structure and syntax
+✓ Each chunk is valid code (usually executable)
+✓ Respects language-specific patterns
+✓ Better for code embeddings and retrieval
+✓ Maintains context between related functions
+✓ Supports multiple programming languages
+✓ Reduces breaking of logical units
+
+DISADVANTAGES:
+--------------
+✗ More complex than generic splitters
+✗ Requires language specification
+✗ Slightly slower than character splitter
+✗ May create uneven chunk sizes
+✗ Needs correct language detection
+
+USE CASES:
+----------
+• Code repository documentation and search
+• Codebase analysis and summarization
+• Code embedding for retrieval
+• Code review and quality analysis
+• Building code-aware RAG systems
+• Documentation generation from code
+• Code snippet retrieval systems
+• LLM-powered code understanding
+• Creating searchable code databases
+
+OPTIMIZATION TIPS:
+-------------------
+1. Adjust chunk_size based on function/class size
+2. Use overlap of 10-20% for context
+3. Test with actual codebase samples
+4. Combine with embedding models for search
+5. Consider code complexity when setting size
+6. Monitor chunk statistics for distribution
+
+LANGUAGE SELECTION TIPS:
+------------------------
+• Must specify correct language
+• Language affects separator hierarchy
+• Wrong language = poor results
+• When unsure, test with multiple options
+• Some languages (JS/TS) can share splitters
+
+WHEN TO USE vs WHEN NOT TO USE:
+--------------------------------
+USE when:
+  ✓ Processing source code files
+  ✓ Building code search systems
+  ✓ Creating code embeddings
+  ✓ Code repository indexing
+  ✓ Code documentation generation
+  ✓ Code-aware RAG systems
+
+DON'T USE when:
+  ✗ Processing plain text documents
+  ✗ General article/blog splitting
+  ✗ Code is not primary content
+  ✗ Performance is critical (slower)
+  ✗ Language cannot be determined
+
+BEST PRACTICES:
+---------------
+1. Always validate language specification
+2. Test with representative code samples
+3. Adjust chunk_size for language complexity
+4. Monitor chunk integrity (syntax validity)
+5. Use with semantic search for better results
+6. Consider code style and formatting
+7. Preserve important imports and declarations
+
+================================================================================

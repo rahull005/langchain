@@ -1,0 +1,346 @@
+================================================================================
+RECURSIVE CHARACTER TEXT SPLITTER - DETAILED EXPLANATION
+================================================================================
+
+OVERVIEW:
+---------
+The RecursiveCharacterTextSplitter is a more intelligent version of 
+CharacterTextSplitter. It recursively tries to split text using a list of 
+separators, starting with the "best" separator (like paragraph breaks), 
+and falling back to less ideal separators (like newlines or spaces) only 
+if necessary to maintain chunk_size constraints.
+
+KEY PARAMETERS:
+---------------
+1. chunk_size (int):
+   - Maximum number of characters in each chunk
+   - Example: chunk_size=200 means target chunk size is 200 characters
+
+2. chunk_overlap (int):
+   - Number of characters overlapping between chunks
+   - Preserves context between chunks
+
+3. separators (list):
+   - List of separators to try in order
+   - Default: ["\n\n", "\n", " ", ""]
+   - The splitter tries first separator, then next if needed
+   - This hierarchical approach preserves document structure
+
+LENGTH_FUNCTION:
+   - Function to measure text length (default: len())
+   - Can be customized for token counting
+
+WHY RECURSIVE?
+--------------
+The term "recursive" refers to the algorithm's approach:
+1. Try splitting on the FIRST separator (e.g., "\n\n") (paragraph)
+2. Check if chunks are under chunk_size
+3. If any chunk is TOO BIG:
+   - Recursively apply the same logic to that chunk
+   - Try the NEXT separator (e.g., "\n")
+4. Continue until chunks are appropriately sized
+5. Fall back to character-level splitting ("") if needed
+
+This ensures natural break points are preserved while maintaining size limits.
+
+HOW IT WORKS - DETAILED PROCESS:
+--------------------------------
+Step 1: Input text and separator list
+Step 2: Split on first separator ("\n\n" - paragraphs)
+Step 3: Check each chunk's size
+Step 4: For chunks > chunk_size:
+        - Recursively split on next separator ("\n")
+Step 5: For chunks still > chunk_size:
+        - Recursively split on next separator (" " - spaces)
+Step 6: For chunks still > chunk_size:
+        - Fall back to character splitting ("")
+Step 7: Add overlap between chunks
+Step 8: Merge small adjacent chunks if beneficial
+
+ADVANTAGES:
+-----------
+✓ Preserves document structure (paragraphs, sentences)
+✓ More semantic than simple character splitting
+✓ Smarter about breaking at natural boundaries
+✓ Handles varying text styles well
+✓ Good for general document processing
+✓ Better quality chunks with context preservation
+✓ Faster than full semantic analysis
+
+DISADVANTAGES:
+--------------
+✗ More complex than CharacterTextSplitter
+✗ Slightly slower processing
+✗ Still not fully semantic (doesn't understand meaning)
+✗ Separator list must be manually configured
+✗ Not ideal for structured data like code
+
+USE CASES:
+----------
+• General-purpose document splitting for RAG
+• Blog posts, articles, and news content
+• Mixed text with varying structures
+• When chunk quality matters but speed is acceptable
+• Default choice for most text splitting needs
+• Documents with clear paragraph structure
+
+DEFAULT SEPARATORS:
+-------------------
+["\n\n", "\n", " ", ""]
+
+Hierarchy (from best to worst):
+1. "\n\n" - Paragraph breaks (best for preserving meaning)
+2. "\n"   - Line breaks (good for structured text)
+3. " "    - Word spaces (keeps words together)
+4. ""     - Character level (last resort)
+
+EXAMPLE WALKTHROUGH:
+--------------------
+Text:
+"Space exploration has led to incredible scientific discoveries. From landing 
+on the Moon to exploring Mars, humanity continues to push the boundaries.
+
+These missions have expanded our knowledge. Satellite communications and GPS 
+trace their roots to space innovations."
+
+With chunk_size=200:
+
+STEP 1: Split on "\n\n" (paragraphs)
+- Chunk A: "Space exploration has led to incredible scientific discoveries. 
+           From landing on the Moon to exploring Mars, humanity continues 
+           to push the boundaries." (175 chars - OK)
+
+- Chunk B: "These missions have expanded our knowledge. Satellite communications 
+           and GPS trace their roots to space innovations." (115 chars - OK)
+
+Result: Both chunks under 200 chars, so we're done!
+
+VISUAL TEXT SPLITTING DIAGRAM:
+==============================
+
+ORIGINAL TEXT:
+─────────────
+"Space exploration has led to incredible scientific discoveries. From landing
+on the Moon to exploring Mars, humanity continues to push the boundaries.
+
+These missions have expanded our knowledge. Satellite communications and GPS
+trace their roots to space innovations."
+
+WITH chunk_size=200, chunk_overlap=0:
+
+STEP 1: Try splitting on "\n\n" (paragraph separator)
+
+┌─────────────────────────────────────────────────────────────┐
+│ PARAGRAPH 1:                                                │
+│ "Space exploration has led to incredible scientific         │
+│  discoveries. From landing on the Moon to exploring Mars,   │
+│  humanity continues to push the boundaries."               │
+│                                                             │
+│  Length: 175 chars ✓ (< 200 limit)                        │
+└─────────────────────────────────────────────────────────────┘
+          ↓
+       BREAK
+          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ PARAGRAPH 2:                                                │
+│ "These missions have expanded our knowledge. Satellite       │
+│  communications and GPS trace their roots to space           │
+│  innovations."                                              │
+│                                                             │
+│  Length: 115 chars ✓ (< 200 limit)                        │
+└─────────────────────────────────────────────────────────────┘
+
+RESULT:
+       Chunk 1: "Space exploration...push the boundaries."
+       Chunk 2: "These missions...space innovations."
+
+FINAL OUTPUT:
+─────────────
+╔═══════════════════════════════════════════════════════════════╗
+║ CHUNK 1 (175 chars) - TOPIC: Space Exploration Discoveries   ║
+╠═══════════════════════════════════════════════════════════════╣
+║ Space exploration has led to incredible scientific            ║
+║ discoveries. From landing on the Moon to exploring Mars,      ║
+║ humanity continues to push the boundaries.                    ║
+╚═══════════════════════════════════════════════════════════════╝
+
+╔═══════════════════════════════════════════════════════════════╗
+║ CHUNK 2 (115 chars) - TOPIC: Knowledge & GPS Origins         ║
+╠═══════════════════════════════════════════════════════════════╣
+║ These missions have expanded our knowledge. Satellite         ║
+║ communications and GPS trace their roots to space             ║
+║ innovations.                                                  ║
+╚═══════════════════════════════════════════════════════════════╝
+
+KEY OBSERVATIONS:
+─────────────────
+✓ Respects paragraph boundaries ("\n\n")
+✓ Only uses next separator if chunk > chunk_size
+✓ Maintains semantic meaning within chunks
+✓ Each chunk is usually a complete thought
+✓ Much more readable than character splitter output
+✓ Default separator hierarchy: ["\n\n", "\n", " ", ""]
+
+FLOW CHART:
+===========
+
+                    ┌─────────────────────────────┐
+                    │   Start: Input Text         │
+                    │   Separators: ["\n\n",...]  │
+                    └────────────┬────────────────┘
+                                 │
+                    ┌────────────┴────────────────┐
+                    │  separator_index = 0        │
+                    │  chunks = []                │
+                    └────────────┬────────────────┘
+                                 │
+                ┌───────────────┬┴┬───────────────┐
+                │               │ │               │
+    ┌───────────▼──────────┐   │ │  ┌──────────┐ │
+    │ Get current separator│   │ │  │ End of   │ │
+    │ sep = separators[i]  │   │ │  │ separator│ │
+    │                      │   │ │  │ list?    │ │
+    └───────────┬──────────┘   │ │  │          │ │
+                │               │ │  │ YES      │ │
+    ┌───────────▼──────────┐   │ │  └──┬───────┘ │
+    │ Split text using sep │   │ │     │         │
+    │ good_splits = []     │   │ │     │         │
+    │ other_splits = []    │   │ │     │         │
+    └───────────┬──────────┘   │ │     │         │
+                │               │ │     │         │
+    ┌───────────▼──────────┐   │ │     │         │
+    │ For each resulting   │   │ │     │         │
+    │ chunk:               │   │ │     │         │
+    │                      │   │ │     │         │
+    │ Is chunk size        │   │ │     │         │
+    │ <= chunk_size limit? │   │ │     │         │
+    └────┬─────────────────┘   │ │     │         │
+         │                      │ │     │         │
+     ┌───┴──────┬───────────┐   │ │     │         │
+     │ YES      │ NO        │   │ │     │         │
+     │  │       │  │        │   │ │     │         │
+┌────▼──┘   ┌───▼──────────────┐ │ │     │         │
+│ Add to    │ Add to           │ │ │     │         │
+│ good_splits│ other_splits     │ │ │     │         │
+└────┬──────┘ (needs recursion) │ │ │     │         │
+     │        └────┬───────────┘ │ │     │         │
+     │             │             │ │     │         │
+     │   ┌─────────▼─────────┐   │ │     │         │
+     │   │ Recursively split  │   │ │     │         │
+     │   │ other_splits using │   │ │     │         │
+     │   │ next separator     │   │ │     │         │
+     │   │ separator_index++  │   │ │     │         │
+     │   └─────────┬─────────┘   │ │     │         │
+     │             │             │ │     │         │
+     │   ┌─────────▼──────┐      │ │     │         │
+     │   │ Add results to │      │ │     │         │
+     │   │ good_splits    │      │ │     │         │
+     │   └─────────┬──────┘      │ │     │         │
+     │             │             │ │     │         │
+     └──────┬──────┴─────────────┘ │ │     │         │
+            │                      │ │     │         │
+        ┌───▼──────────────────────┘ │     │         │
+        │                            │     │         │
+    ┌───▼──────────────────────────┐ │     │         │
+    │ Add overlap between chunks   │ │     │         │
+    │ good_splits[i:i+overlap]     │ │     │         │
+    │ prepended to next chunk      │ │     │         │
+    └───┬──────────────────────────┘ │     │         │
+        │                            │     │         │
+        │                            │     │         │
+        └────────┬───────────────────┘     │         │
+                 │                         │         │
+                 │                         │         │
+                 └────────────────────────┬┘         │
+                                          │          │
+                                          │          │
+                                    ┌─────▼──────────┘
+                                    │
+                                    │
+                    ┌───────────────▼──────────────┐
+                    │ Return list of chunks       │
+                    │ (recursively merged/split)  │
+                    └─────────────────────────────┘
+
+
+CODE EXAMPLE:
+=============
+
+from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
+
+# Initialize with default separators
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=200,           # Target chunk size
+    chunk_overlap=0,          # No overlap
+    separators=["\n\n", "\n", " ", ""]  # Try these in order
+)
+
+# Split the text
+chunks = splitter.split_text(text)
+
+# Custom separators for markdown
+splitter_md = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=50,
+    separators=[
+        "\n## ",      # Markdown h2
+        "\n### ",     # Markdown h3
+        "\n\n",       # Paragraphs
+        "\n",         # Lines
+        " ",          # Words
+        ""            # Characters
+    ]
+)
+
+
+CUSTOMIZATION:
+---------------
+You can customize separators for different document types:
+
+MARKDOWN:
+  separators = ["\n# ", "\n## ", "\n### ", "\n\n", "\n", " ", ""]
+
+CODE:
+  Use Language-specific splitter instead
+
+JSON:
+  separators = ["\n\n", "\n", ",", " ", ""]
+
+
+OPTIMIZATION TIPS:
+-------------------
+1. Adjust separators based on document type
+2. Experiment with chunk_size relative to model's token limit
+3. Use chunk_overlap 10-20% of chunk_size
+4. Monitor chunk distribution for quality
+5. Consider combining with semantic filtering
+
+COMPARISON WITH CHARACTER SPLITTER:
+------------------------------------
+CharacterTextSplitter:
+  - Splits purely by character count
+  - May break mid-sentence
+  - Very simple and fast
+
+RecursiveCharacterTextSplitter:
+  - Respects natural boundaries (paragraphs, lines, words)
+  - Better chunk quality
+  - Slightly more complex
+  - RECOMMENDED for most use cases
+
+WHEN TO USE vs WHEN NOT TO USE:
+--------------------------------
+USE when:
+  ✓ Processing general documents (articles, blogs)
+  ✓ Document has clear paragraph structure
+  ✓ Balance needed between speed and quality
+  ✓ Most text-based RAG applications
+  ✓ Default choice when unsure
+
+DON'T USE when:
+  ✗ Processing code (use LanguageTextSplitter)
+  ✗ Need semantic awareness (use SemanticChunker)
+  ✗ Pure character-based splitting required
+  ✗ Working with highly structured data (use specialized splitter)
+
+================================================================================
